@@ -117,3 +117,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+JWT_SECRET = SECRET_KEY
+JWT_ALG = "HS256"
+
+JWT_ACCESS_EXP_MINUTES = 30
+JWT_REFRESH_EXP_MINUTES = 14
