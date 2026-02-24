@@ -43,8 +43,13 @@ class UserGameStatus(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        verbose_name = "User game status"
+        verbose_name_plural = "User game statuses"
         constraints = [
-            models.UniqueConstraint(fields=["user", "game"], name="unique_status_per_user_game")
+            models.UniqueConstraint(
+                fields=["user", "game"],
+                name="unique_status_per_user_game"
+            )
         ]
         indexes = [
             models.Index(fields=["user", "status"]),
