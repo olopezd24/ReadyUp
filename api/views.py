@@ -53,3 +53,20 @@ def list_games(request):
         "offset": offset,
         "results": results
     })
+
+@require_http_methods(["GET"])
+def get_game_detail(request, game_id):
+    try:
+        game = Game.objects.get(id=game_id)
+    except Game.DoesNotExist:
+        return JsonResponse({"error": "Game not found"}, status=404)
+
+    return JsonResponse({
+        "id": game.id,
+        "title": game.title,
+        "description": game.description,
+        "releaseDate": game.release_date.isoformat() if game.release_date else None,
+        "genres": [game.genre] if game.genre else [],
+        "platforms": [game.platform] if game.platform else [],
+        "coverUrl": game.cover_url,
+    })
