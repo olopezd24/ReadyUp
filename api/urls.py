@@ -8,4 +8,5 @@ urlpatterns = [
     path("me", views_auth.me),
     path("games", views.list_games),
     path("games/<int:game_id>", views.get_game_detail),
+    path("games/<int:game_id>/reviews", views.list_game_reviews),
 ]
