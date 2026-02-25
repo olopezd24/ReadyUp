@@ -9,4 +9,5 @@ urlpatterns = [
     path("games", views.list_games),
     path("games/<int:game_id>", views.get_game_detail),
     path("games/<int:game_id>/reviews", views.list_game_reviews),
+    path("games/<int:game_id>/review", views.my_review_endpoint),
 ]
