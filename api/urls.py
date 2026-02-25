@@ -6,6 +6,7 @@ urlpatterns = [
     path("auth/login", views_auth.login),
     path("auth/refresh", views_auth.refresh),
     path("me", views_auth.me),
+    path("me/reviews", views.list_my_reviews),
     path("games", views.list_games),
     path("games/<int:game_id>", views.get_game_detail),
     path("games/<int:game_id>/reviews", views.list_game_reviews),

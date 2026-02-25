@@ -245,3 +245,37 @@ def my_review_endpoint(request, game_id):
         return update_my_review(request, game_id)
     if request.method == "DELETE":
         return delete_my_review(request, game_id)
+
+@require_http_methods(["GET"])
+@jwt_required
+def list_my_reviews(request):
+    qs = Review.objects.filter(user=request.user).select_related("game")
+
+    try:
+        limit = int(request.GET.get("limit", 20))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "Invalid parameters"}, status=400)
+
+    if limit < 1 or limit > 100 or offset < 0:
+        return JsonResponse({"error": "Invalid limit/offset"}, status=400)
+
+    count = qs.count()
+    qs = qs.order_by("-updated_at")[offset:offset+limit]
+
+    results = []
+    for r in qs:
+        results.append({
+            "game": {
+                "id": r.game.id,
+                "title": r.game.title,
+            },
+            "rating": r.rating,
+            "text": r.text,
+            "updated_at": r.updated_at.isoformat(),
+        })
+
+    return JsonResponse({
+        "count": count,
+        "results": results
+    })
