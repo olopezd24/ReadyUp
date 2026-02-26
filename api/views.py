@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.models import User
 
 from .auth import jwt_required
-from .models import Game, Review, UserGameStatus, Follow
+from .models import Game, Review, UserGameStatus, Follow, Report
 from .utils import parse_json, error
 
 
@@ -568,6 +568,107 @@ def feed(request):
             "rating": r.rating,
             "text": r.text,
             "updated_at": r.updated_at.isoformat(),
+        })
+
+    return JsonResponse({
+        "count": count,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }, status=200)
+
+VALID_REPORT_TARGETS = {"review", "game", "user"}
+
+def report_target_exists(target_type: str, target_id: int) -> bool:
+    if target_type == "review":
+        return Review.objects.filter(id=target_id).exists()
+    if target_type == "game":
+        return Game.objects.filter(id=target_id).exists()
+    if target_type == "user":
+        return User.objects.filter(id=target_id).exists()
+    return False
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def create_report(request):
+    data = parse_json(request)
+    if data is None:
+        return error("Invalid JSON", 400)
+
+    target_type = (data.get("target_type") or "").strip().lower()
+    target_id = data.get("target_id")
+    reason = (data.get("reason") or "").strip().lower()
+    message = data.get("message") or ""
+
+    if not target_type or target_id is None or not reason:
+        return error("Missing fields: target_type, target_id, reason", 400)
+
+    if target_type not in VALID_REPORT_TARGETS:
+        return error("Invalid target type (review, game, user)", 400)
+
+    try:
+        target_id = int(target_id)
+    except (TypeError, ValueError):
+        return error("targetId must be an integer", 400)
+
+    if target_id <= 0:
+        return error("targetId must be positive", 400)
+
+    if target_type == "user" and target_id == request.user.id:
+        return error("You cannot report yourself", 400)
+
+    if not report_target_exists(target_type, target_id):
+        return JsonResponse({"error": "Target not found"}, status=404)
+
+    try:
+        r = Report.objects.create(
+            reporter=request.user,
+            target_type=target_type,
+            target_id=target_id,
+            reason=reason,
+            message=message,
+        )
+    except IntegrityError:
+        return JsonResponse({"error": "Target already exists"}, status=400)
+
+    return JsonResponse({
+        "id": r.id,
+        "targetType": r.target_type,
+        "targetId": r.target_id,
+        "reason": r.reason,
+        "message": r.message,
+        "status": r.status,
+        "createdAt": r.created_at.isoformat(),
+    }, status=201)
+
+@require_http_methods(["GET"])
+@jwt_required
+def list_my_reports(request):
+    qs = Report.objects.filter(reporter=request.user).order_by("-created_at")
+
+    try:
+        limit = int(request.GET.get("limit", 20))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "Invalid pagination params"}, status=400)
+
+    if limit < 1 or limit > 100 or offset < 0:
+        return JsonResponse({"error": "Invalid limit/offset"}, status=400)
+
+    count = qs.count()
+    qs = qs[offset:offset + limit]
+
+    results = []
+    for r in qs:
+        results.append({
+            "id": r.id,
+            "targetType": r.target_type,
+            "targetId": r.target_id,
+            "reason": r.reason,
+            "message": r.message,
+            "status": r.status,
+            "createdAt": r.created_at.isoformat(),
         })
 
     return JsonResponse({

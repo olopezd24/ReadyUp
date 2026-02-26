@@ -10,6 +10,7 @@ urlpatterns = [
     path("me/reviews", views.list_my_reviews),
     path("me/status", views.me_status_endpoint),
     path("me/status/<int:game_id>", views.me_status_game_endpoint),
+    path("me/reports", views.list_my_reports),
 
     path("games", views.list_games),
     path("games/<int:game_id>", views.get_game_detail),
@@ -21,4 +22,6 @@ urlpatterns = [
     path("users/<int:user_id>/following", views.list_following),
 
     path("feed", views.feed),
+
+    path("reports", views.create_report),
 ]
