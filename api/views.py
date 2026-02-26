@@ -1,9 +1,8 @@
-from django.contrib.staticfiles.storage import staticfiles_storage
 from django.db import IntegrityError
-from django.http import JsonResponse
+from django.db.models import Avg
+from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.db.models import Q, Avg
 
 from .auth import jwt_required
 from .models import Game, Review, UserGameStatus
@@ -14,12 +13,9 @@ def recalc_game_avg_rating(game_id: int) -> None:
     avg = Review.objects.filter(game_id=game_id).aggregate(a=Avg("rating"))["a"]
     Game.objects.filter(id=game_id).update(avg_rating=float(avg or 0))
 
-VALID_STATUSES = {c[0] for c in UserGameStatus.Status.choices}
 
-def validate_status(value):
-    if value not in VALID_STATUSES:
-        return False
-    return True
+def validate_status(value: str) -> bool:
+    return value in UserGameStatus.Status.values
 
 
 @require_http_methods(["GET"])
@@ -157,6 +153,9 @@ def create_my_review(request, game_id):
     if rating < 1 or rating > 10:
         return error("rating must be between 1 and 10", 400)
 
+    if Review.objects.filter(user=request.user, game_id=game_id).exists():
+        return JsonResponse({"error": "Ya existe una review para este juego"}, status=409)
+
     try:
         review = Review.objects.create(
             user=request.user,
@@ -252,6 +251,7 @@ def my_review_endpoint(request, game_id):
         return update_my_review(request, game_id)
     if request.method == "DELETE":
         return delete_my_review(request, game_id)
+    return HttpResponseNotAllowed(["GET", "POST", "PUT", "DELETE"])
 
 @require_http_methods(["GET"])
 @jwt_required
@@ -334,16 +334,16 @@ def add_my_status(request):
     data = parse_json(request)
     if data is None:
         return error("Invalid JSON", 400)
-    game_id = data.get("gameId")
+    game_id = data.get("game_id")
     status = data.get("status")
 
     if game_id is None or status is None:
-        return error("Missing fields: gameId, status", 400)
+        return error("Missing fields: game_id, status", 400)
 
     try:
         game_id = int(game_id)
     except (TypeError, ValueError):
-        return error("gameId must be an integer", 400)
+        return error("game_id must be an integer", 400)
 
     if not validate_status(status):
         return JsonResponse({"error": "Invalid status"}, status=400)
@@ -361,9 +361,9 @@ def add_my_status(request):
         return JsonResponse({"error": "Status already exists for this game"}, status=400)
 
     return JsonResponse({
-        "gameId": obj.game_id,
+        "game_id": obj.game_id,
         "status": obj.status,
-        "updatedAt": obj.updated_at.isoformat(),
+        "updated_at": obj.updated_at.isoformat(),
     }, status=201)
 
 @csrf_exempt
@@ -390,9 +390,9 @@ def update_my_status(request, game_id):
     obj.save(update_fields=["status", "updated_at"])
 
     return JsonResponse({
-        "gameId": obj.game_id,
+        "game_id": obj.game_id,
         "status": obj.status,
-        "updatedAt": obj.updated_at.isoformat(),
+        "updated_at": obj.updated_at.isoformat(),
     }, status=200)
 
 @csrf_exempt
