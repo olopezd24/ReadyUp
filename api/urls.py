@@ -19,4 +19,6 @@ urlpatterns = [
     path("users/<int:user_id>/follow", views.follow_endpoint),
     path("users/<int:user_id>/followers", views.list_followers),
     path("users/<int:user_id>/following", views.list_following),
+
+    path("feed", views.feed),
 ]

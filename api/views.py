@@ -527,3 +527,53 @@ def follow_endpoint(request, user_id):
     if request.method == "POST":
         return follow_user(request, user_id)
     return unfollow_user(request, user_id)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@jwt_required
+def feed(request):
+    following_ids = list(
+        Follow.objects.filter(follower=request.user).values_list("following_id", flat=True)
+    )
+
+    if not following_ids:
+        return JsonResponse({
+            "count": 0,
+            "limit": int(request.GET.get("limit", 20)) if request.GET.get("limit") else 20,
+            "offset": int(request.GET.get("offset", 0)) if request.GET.get("offset") else 0,
+            "results": [],
+        }, status=200)
+
+    qs = (
+        Review.objects.filter(user_id__in=following_ids).select_related("user", "game").order_by("-updated_at")
+    )
+
+    try:
+        limit = int(request.GET.get("limit", 20))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "Invalid pagination params"}, status=400)
+
+    if limit < 1 or limit > 100 or offset < 0:
+        return JsonResponse({"error": "Invalid limit/offset"}, status=400)
+
+    count = qs.count()
+    qs = qs[offset:offset + limit]
+
+    results = []
+    for r in qs:
+        results.append({
+            "user": {"id": r.user.id, "username": r.user.username},
+            "game": {"id": r.game.id, "title": r.game.title},
+            "rating": r.rating,
+            "text": r.text,
+            "updated_at": r.updated_at.isoformat(),
+        })
+
+    return JsonResponse({
+        "count": count,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }, status=200)
+
