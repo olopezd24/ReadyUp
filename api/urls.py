@@ -15,4 +15,8 @@ urlpatterns = [
     path("games/<int:game_id>", views.get_game_detail),
     path("games/<int:game_id>/reviews", views.list_game_reviews),
     path("games/<int:game_id>/review", views.my_review_endpoint),
+
+    path("users/<int:user_id>/follow", views.follow_endpoint),
+    path("users/<int:user_id>/followers", views.list_followers),
+    path("users/<int:user_id>/following", views.list_following),
 ]

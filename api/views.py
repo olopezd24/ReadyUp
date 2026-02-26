@@ -1,11 +1,14 @@
+from turtledemo.penrose import f
+
 from django.db import IntegrityError
 from django.db.models import Avg
 from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.models import User
 
 from .auth import jwt_required
-from .models import Game, Review, UserGameStatus
+from .models import Game, Review, UserGameStatus, Follow
 from .utils import parse_json, error
 
 
@@ -422,3 +425,105 @@ def me_status_game_endpoint(request, game_id):
     if request.method == "PUT":
         return update_my_status(request, game_id)
     return delete_my_status(request, game_id)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def follow_user(request, user_id):
+    if request.user.id == user_id:
+        return JsonResponse({"error": "You cannot follow yourself"}, status=400)
+
+    try:
+        target = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    try:
+        Follow.objects.create(follower=request.user, following=target)
+    except IntegrityError:
+        return JsonResponse({"error": "Already following"}, status=409)
+
+    return JsonResponse({"message": "Followed"}, status=201)
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@jwt_required
+def unfollow_user(request, user_id):
+    if request.user.id == user_id:
+        return JsonResponse({"error": "You cannot unfollow yourself"}, status=400)
+
+    deleted, _= Follow.objects.filter(follower=request.user, following_id=user_id).delete()
+    if deleted == 0:
+        return JsonResponse({"error": "Follow relation not found"}, status=404)
+
+    return JsonResponse({}, status=204)
+
+@require_http_methods(["GET"])
+def list_followers(request, user_id):
+    if not User.objects.filter(id=user_id).exists():
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    qs = Follow.objects.filter(following_id=user_id).select_related("follower").order_by("-created_at")
+
+    try:
+        limit = int(request.GET.get("limit", 20))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "Invalid pagination params"}, status=400)
+
+    if limit < 1 or limit > 100 or offset < 0:
+        return JsonResponse({"error": "Invalid limit/offset"}, status=400)
+
+    count = qs.count()
+    qs = qs[offset:offset + limit]
+
+    results = [{
+        "id": f.follower.id,
+        "username": f.follower.username,
+    } for f in qs]
+
+    return JsonResponse({
+        "count": count,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }, status=200)
+
+@require_http_methods(["GET"])
+def list_following(request, user_id):
+    if not User.objects.filter(id=user_id).exists():
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    qs = Follow.objects.filter(follower_id=user_id).select_related("following").order_by("-created_at")
+
+    try:
+        limit = int(request.GET.get("limit", 20))
+        offset = int(request.GET.get("offset", 0))
+    except ValueError:
+        return JsonResponse({"error": "Invalid pagination params"}, status=400)
+
+    if limit < 1 or limit > 100 or offset < 0:
+        return JsonResponse({"error": "Invalid limit/offset"}, status=400)
+
+    count = qs.count()
+    qs = qs[offset:offset + limit]
+
+    results = [{
+        "id": f.following.id,
+        "username": f.following.username,
+    } for f in qs]
+
+    return JsonResponse({
+        "count": count,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }, status=200)
+
+@csrf_exempt
+@require_http_methods(["POST", "DELETE"])
+@jwt_required
+def follow_endpoint(request, user_id):
+    if request.method == "POST":
+        return follow_user(request, user_id)
+    return unfollow_user(request, user_id)

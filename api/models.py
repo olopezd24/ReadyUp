@@ -68,6 +68,9 @@ class Follow(models.Model):
             models.Index(fields=["follower", "following"]),
         ]
 
+    def _str__(self):
+        return f"{self.follower.username} -> {self.following.username}"
+
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     type = models.CharField(max_length=32)
