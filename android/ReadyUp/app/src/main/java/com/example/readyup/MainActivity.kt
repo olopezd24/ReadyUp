@@ -8,9 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.readyup.data.remote.Api
 import com.example.readyup.ui.theme.ReadyUpTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,29 +20,26 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ReadyUpTheme {
-                Scaffold( modifier = Modifier.fillMaxSize() ) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                GameSmokeTest()
             }
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+fun GameSmokeTest() {
+    var text by remember { mutableStateOf("Cargando /games...") }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ReadyUpTheme {
-        Greeting("Android")
+    LaunchedEffect(Unit) {
+        text = try {
+            val res = Api.service.getGames(limit = 1, offset = 0)
+            val first = res.results.firstOrNull()?.title ?: "Sin resultados"
+            "OK. count=${res.count}. First=$first"
+        } catch (e: Exception) {
+            "Error llamando /games: ${e.message}"
+        }
     }
+
+    Text(text = text)
+
 }
