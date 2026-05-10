@@ -22,12 +22,15 @@ TOTAL_GAMES  = 500
 PAGE_SIZE    = 40
 SLEEP_BETWEEN_REQUESTS = 0.5
 
-# Géneros a importar (deja vacío [] para importar todos)
-GENRES_FILTER = []
-# Ejemplo para solo algunos: ["action", "rpg", "adventure", "shooter", "strategy"]
-
 # Ordenación: relevance | released | added | created | updated | rating | metacritic
 ORDERING = "-rating"
+
+# Géneros permitidos — solo se importan juegos que pertenezcan a uno de estos
+ALLOWED_GENRES = [
+    "action", "adventure", "rpg", "shooter", "strategy", "puzzle",
+    "racing", "sports", "simulation", "arcade", "platformer", "fighting",
+    "family", "indie", "casual", "massively-multiplayer", "card", "board-games"
+]
 
 # ── Setup Django ──────────────────────────────────────────────────────────────
 
@@ -39,16 +42,14 @@ from api.models import Game
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def get_games_page(page: int, genre: str = None) -> dict:
+def get_games_page(page: int) -> dict:
     params = {
         "key":       RAWG_API_KEY,
         "page":      page,
         "page_size": PAGE_SIZE,
         "ordering":  ORDERING,
+        "mature":    False,
     }
-    if genre:
-        params["genres"] = genre
-
     resp = requests.get("https://api.rawg.io/api/games", params=params, timeout=15)
     resp.raise_for_status()
     return resp.json()
@@ -75,6 +76,13 @@ def parse_genre(game_data: dict) -> str:
     genres = game_data.get("genres") or []
     if genres:
         return genres[0].get("name", "")
+    return ""
+
+
+def parse_genre_slug(game_data: dict) -> str:
+    genres = game_data.get("genres") or []
+    if genres:
+        return genres[0].get("slug", "")
     return ""
 
 
@@ -113,81 +121,84 @@ def main():
 
     print(f"🎮 Iniciando importación de hasta {TOTAL_GAMES} juegos desde RAWG...")
     print(f"   Ordenación: {ORDERING}")
+    print(f"   Géneros permitidos: {', '.join(ALLOWED_GENRES)}")
     print()
 
     imported  = 0
     skipped   = 0
+    filtered  = 0
     errors    = 0
     page      = 1
-    genres    = GENRES_FILTER if GENRES_FILTER else [None]
 
-    for genre in genres:
-        if genre:
-            print(f"📂 Género: {genre}")
-        page = 1
+    while imported < TOTAL_GAMES:
+        try:
+            print(f"  📡 Página {page}...", end=" ", flush=True)
+            data = get_games_page(page)
+            results = data.get("results", [])
 
-        while imported < TOTAL_GAMES:
-            try:
-                print(f"  📡 Página {page}...", end=" ", flush=True)
-                data = get_games_page(page, genre)
-                results = data.get("results", [])
+            if not results:
+                print("sin más resultados.")
+                break
 
-                if not results:
-                    print("sin más resultados.")
+            for g in results:
+                if imported >= TOTAL_GAMES:
                     break
 
-                for g in results:
-                    if imported >= TOTAL_GAMES:
-                        break
+                title = g.get("name", "").strip()
+                if not title:
+                    continue
 
-                    title = g.get("name", "").strip()
-                    if not title:
-                        continue
+                # Filtrar por género permitido
+                genre_slug = parse_genre_slug(g).lower()
+                if not genre_slug or genre_slug not in ALLOWED_GENRES:
+                    filtered += 1
+                    continue
 
-                    # Evitar duplicados por título
-                    if Game.objects.filter(title=title).exists():
-                        skipped += 1
-                        continue
+                # Evitar duplicados por título
+                if Game.objects.filter(title=title).exists():
+                    skipped += 1
+                    continue
 
-                    # Descripción (llamada extra por juego)
-                    rawg_id = g.get("id")
-                    description = ""
-                    if rawg_id:
-                        description = get_game_description(rawg_id)
-                        time.sleep(SLEEP_BETWEEN_REQUESTS)
+                # Descripción (llamada extra por juego)
+                rawg_id = g.get("id")
+                description = ""
+                if rawg_id:
+                    description = get_game_description(rawg_id)
+                    time.sleep(SLEEP_BETWEEN_REQUESTS)
 
-                    try:
-                        Game.objects.create(
-                            title        = title,
-                            description  = description,
-                            release_date = parse_date(g),
-                            cover_url    = parse_cover(g),
-                            avg_rating   = 0,  # Se calcula cuando los usuarios puntúan
-                            genre        = parse_genre(g),
-                            platform     = parse_platform(g),
-                        )
-                        imported += 1
-                        print(f"✅ [{imported}] {title}")
-                    except Exception as e:
-                        errors += 1
-                        print(f"⚠️  Error guardando '{title}': {e}")
+                try:
+                    Game.objects.create(
+                        title        = title,
+                        description  = description,
+                        release_date = parse_date(g),
+                        cover_url    = parse_cover(g),
+                        avg_rating   = 0,
+                        genre        = parse_genre(g),
+                        platform     = parse_platform(g),
+                    )
+                    imported += 1
+                    print(f"✅ [{imported}] {title} ({parse_genre(g)})")
+                except Exception as e:
+                    errors += 1
+                    print(f"⚠️  Error guardando '{title}': {e}")
 
-                page += 1
-                time.sleep(SLEEP_BETWEEN_REQUESTS)
+            page += 1
+            time.sleep(SLEEP_BETWEEN_REQUESTS)
 
-                if not data.get("next"):
-                    break
+            if not data.get("next"):
+                break
 
-            except requests.exceptions.RequestException as e:
-                print(f"\n❌ Error de red en página {page}: {e}")
-                print("   Esperando 5 segundos y reintentando...")
-                time.sleep(5)
-                continue
+        except requests.exceptions.RequestException as e:
+            print(f"\n❌ Error de red en página {page}: {e}")
+            print("   Esperando 5 segundos y reintentando...")
+            time.sleep(5)
+            continue
 
     print()
     print("=" * 50)
     print(f"✅ Importados:  {imported} juegos")
     print(f"⏭️  Omitidos:   {skipped} (ya existían)")
+    print(f"🚫 Filtrados:  {filtered} (género no permitido)")
     print(f"❌ Errores:    {errors}")
     print(f"📦 Total en BD: {Game.objects.count()} juegos")
 
