@@ -46,7 +46,7 @@ ReadyUp/
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/olopezd24/ReadyUp.git
+git clone --depth 1 https://github.com/olopezd24/ReadyUp.git
 cd ReadyUp
 ```
 
