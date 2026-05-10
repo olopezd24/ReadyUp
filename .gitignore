@@ -19,3 +19,7 @@ db.sqlite3
 
 # Mac
 .DS_Store
+
+android/ReadyUp/build/
+android/ReadyUp/.gradle/
+android/ReadyUp/local.properties
