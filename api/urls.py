@@ -17,9 +17,11 @@ urlpatterns = [
     path("games/<int:game_id>/reviews", views.list_game_reviews),
     path("games/<int:game_id>/review", views.my_review_endpoint),
 
+    path("users", views.list_users),
     path("users/<int:user_id>/follow", views.follow_endpoint),
     path("users/<int:user_id>/followers", views.list_followers),
     path("users/<int:user_id>/following", views.list_following),
+    path("users/<int:user_id>/reviews", views.list_user_reviews),
 
     path("feed", views.feed),
 

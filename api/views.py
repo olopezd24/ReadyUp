@@ -456,7 +456,7 @@ def unfollow_user(request, user_id):
     if deleted == 0:
         return JsonResponse({"error": "Follow relation not found"}, status=404)
 
-    return JsonResponse({}, status=204)
+    return JsonResponse({"success": True}, status=200)
 
 @require_http_methods(["GET"])
 def list_followers(request, user_id):
@@ -678,3 +678,24 @@ def list_my_reports(request):
         "results": results,
     }, status=200)
 
+
+@jwt_required
+def list_users(request):
+    q = request.GET.get('q', '').strip()
+    if not q:
+        return JsonResponse({'count': 0, 'results': []})
+
+    users = User.objects.filter(username__icontains=q).exclude(id=request.user.id)[:20]
+    results = [{'id': u.id, 'username': u.username} for u in users]
+    return JsonResponse({'count': len(results), 'results': results})
+
+@jwt_required
+def list_user_reviews(request, user_id):
+    reviews = Review.objects.filter(user_id=user_id).select_related('game').order_by('-updated_at')[:20]
+    results = [{
+        'game': {'id': r.game.id, 'title': r.game.title},
+        'rating': r.rating,
+        'text': r.text,
+        'updated_at': r.updated_at.isoformat()
+    } for r in reviews]
+    return JsonResponse({'count': len(results), 'results': results})
