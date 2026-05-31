@@ -26,11 +26,13 @@ import com.example.readyup.ui.theme.*
 import com.example.readyup.viewmodel.AuthViewModel
 import com.example.readyup.viewmodel.GamesViewModel
 import com.example.readyup.viewmodel.LibraryViewModel
+import com.example.readyup.viewmodel.UsersViewModel
 
 sealed class Screen(val route: String, val label: String, val icon: String) {
     object Games : Screen("games", "Juegos", "🎮")
     object Library : Screen("library", "Biblioteca", "📚")
     object Feed : Screen("feed", "Feed", "📡")
+    object Users : Screen("users", "Usuarios", "🔍")
     object Profile : Screen("profile", "Perfil", "👤")
 }
 
@@ -51,12 +53,13 @@ fun ReadyUpApp() {
     val authVm: AuthViewModel = viewModel()
     val gamesVm: GamesViewModel = viewModel()
     val libraryVm: LibraryViewModel = viewModel()
+    val usersVm: UsersViewModel = viewModel()
     val authState by authVm.state.collectAsState()
 
     if (!authState.isLoggedIn) {
         AuthScreen(vm = authVm)
     } else {
-        MainHost(authVm, gamesVm, libraryVm)
+        MainHost(authVm, gamesVm, libraryVm, usersVm)
     }
 }
 
@@ -64,31 +67,25 @@ fun ReadyUpApp() {
 fun MainHost(
     authVm: AuthViewModel,
     gamesVm: GamesViewModel,
-    libraryVm: LibraryViewModel
+    libraryVm: LibraryViewModel,
+    usersVm: UsersViewModel
 ) {
-    val screens = listOf(Screen.Games, Screen.Library, Screen.Feed, Screen.Profile)
+    val screens = listOf(Screen.Games, Screen.Library, Screen.Feed, Screen.Users, Screen.Profile)
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Games) }
     var selectedGameId by remember { mutableStateOf<Int?>(null) }
+    var selectedUserId by remember { mutableStateOf<Int?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         // Top bar
         Box(
-            Modifier
-                .fillMaxWidth()
-                .background(Surface)
-                .border(width = 1.dp, color = BorderColor)
+            Modifier.fillMaxWidth().background(Surface).border(width = 1.dp, color = BorderColor)
         ) {
             Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .align(Alignment.TopStart)
+                Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopStart)
                     .background(Brush.horizontalGradient(listOf(Cyan, Rose)))
             )
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
                     .height(52.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -100,27 +97,39 @@ fun MainHost(
 
         // Content
         Box(Modifier.weight(1f)) {
-            if (selectedGameId != null) {
-                GameDetailScreen(
+            when {
+                selectedUserId != null -> UserDetailScreen(
+                    vm = usersVm,
+                    authVm = authVm,
+                    userId = selectedUserId!!,
+                    onBack = { selectedUserId = null },
+                    onGameClick = { selectedGameId = it; selectedUserId = null }
+                )
+                selectedGameId != null -> GameDetailScreen(
                     vm = gamesVm,
                     gameId = selectedGameId!!,
                     onBack = { selectedGameId = null }
                 )
-            } else {
-                when (currentScreen) {
+                else -> when (currentScreen) {
                     Screen.Games -> GamesScreen(gamesVm) { selectedGameId = it }
                     Screen.Library -> LibraryScreen(libraryVm) { selectedGameId = it }
                     Screen.Feed -> FeedScreen(libraryVm) { selectedGameId = it }
+                    Screen.Users -> UsersScreen(usersVm) { selectedUserId = it }
                     Screen.Profile -> ProfileScreen(authVm, libraryVm) { selectedGameId = it }
                 }
             }
         }
 
         // Bottom nav
-        AnimatedVisibility(visible = selectedGameId == null, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(
+            visible = selectedGameId == null && selectedUserId == null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
             BottomNavBar(screens, currentScreen) {
                 currentScreen = it
                 selectedGameId = null
+                selectedUserId = null
             }
         }
     }
@@ -129,12 +138,8 @@ fun MainHost(
 @Composable
 fun BottomNavBar(screens: List<Screen>, current: Screen, onSelect: (Screen) -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Surface)
-            .border(1.dp, BorderColor)
-            .navigationBarsPadding()
-            .height(58.dp)
+        Modifier.fillMaxWidth().background(Surface).border(1.dp, BorderColor)
+            .navigationBarsPadding().height(58.dp)
     ) {
         screens.forEach { screen ->
             val isActive = screen == current

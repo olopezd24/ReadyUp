@@ -90,6 +90,19 @@ interface ApiService {
         @Query("offset") offset: Int = 0
     ): FeedResponse
 
+    // ── Users ─────────────────────────────────────────────────────────────────
+    @GET("users")
+    suspend fun searchUsers(
+        @Query("q") q: String,
+        @Query("limit") limit: Int = 20
+    ): FollowListResponse
+
+    @GET("users/{userId}/reviews")
+    suspend fun getUserReviews(
+        @Path("userId") userId: Int,
+        @Query("limit") limit: Int = 20
+    ): MyReviewListResponse
+
     // ── Follow ────────────────────────────────────────────────────────────────
     @POST("users/{userId}/follow")
     suspend fun follow(@Path("userId") userId: Int): Response<Unit>
